@@ -22,3 +22,6 @@ dependencies = [
     "transformers>=4.50.3",
     "wandb>=0.21.0",
 ]
+
+[tool.setuptools]
+packages = ["genmol"]
