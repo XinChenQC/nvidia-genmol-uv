@@ -1,8 +1,9 @@
----
 
 # NVIDIA GenMol (UV-based Setup)
 
 This project provides generative fragment-based molecule design workflows based on NVIDIA's GenMol model. It supports various fragment-to-molecule tasks such as linker design, motif extension, scaffold decoration, and superstructure generation.
+
+https://github.com/NVIDIA-Digital-Bio/genmol
 
 ## Installation
 
@@ -74,12 +75,6 @@ The input fragment SMILES can include **attachment points** indicated by `[*]` o
 * **Superstructure Generation** – Generate a full molecule given a partial structure
 * **Linker Design (1-step)** – Link two fragments without intermediate mixing
 
----
-
-Let me know if you'd like a minimal version or want to add sections like citations, license, or references.
-
-
-
 ## Wrapper License
 
 This wrapper (outside genmol), built on NVIDIA code, is licensed under the MIT License.
@@ -90,7 +85,7 @@ The source code is made available under Apache-2.0.<br>
 The model weights are made available under the [NVIDIA Open Model License](https://www.nvidia.com/en-us/agreements/enterprise-software/nvidia-open-model-license/).
 
 ## Citation
-If you find this repository and our paper useful, we kindly request to cite our work.
+If you find this repository and NVIDIA‘s paper useful, you must cite NVIDIA's work.
 ```BibTex
 @article{lee2025genmol,
   title     = {GenMol: A Drug Discovery Generalist with Discrete Diffusion},
@@ -99,3 +94,4 @@ If you find this repository and our paper useful, we kindly request to cite our 
   year      = {2025}
 }
 ```
+

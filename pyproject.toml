@@ -1,5 +1,5 @@
 [project]
-name = "genmol-uv"
+name = "genmol_uv"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
@@ -19,9 +19,14 @@ dependencies = [
     "scikit-learn>=1.7.1",
     "tokenizers==0.21.2",
     "torch>=2.7.1",
+    "torchvision>=0.22.1",
     "transformers>=4.50.3",
     "wandb>=0.21.0",
 ]
 
 [tool.setuptools]
 packages = ["genmol"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["genmol", "genmol.*"]
