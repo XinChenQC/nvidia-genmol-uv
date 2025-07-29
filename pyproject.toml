@@ -24,9 +24,6 @@ dependencies = [
     "wandb>=0.21.0",
 ]
 
-[tool.setuptools]
-packages = ["genmol"]
-
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["genmol", "genmol.*"]
