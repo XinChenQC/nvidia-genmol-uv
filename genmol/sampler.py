@@ -32,7 +32,7 @@ from genmol.model import GenMol
 
 
 #ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
-ROOT_DIR = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+ROOT_DIR = os.path.dirname(os.path.realpath(__file__))
 
 
 def load_model_from_path(path):
