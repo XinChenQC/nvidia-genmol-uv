@@ -84,8 +84,9 @@ You can also try out our integrated product for free directly on the [ChemOrches
 
 ChemOrchestra is an all-in-one platform designed to accelerate drug discovery through an integrated suite of user-friendly computational tools. It allows researchers to quickly build and execute complex drug development workflows—without the need for extensive coding or setup. Tools like MolGen, featured prominently on the main page, make molecular generation and screening accessible with just a few clicks. Whether you're designing ligands, running docking studies, ChemOrchestra streamlines the process for both experts and newcomers in computational drug design.
 
-<img width="1237" height="761" alt="image" src="https://github.com/user-attachments/assets/9c1f7c81-52c2-4680-9abb-87e5bdd543bf" />
+You can find GenMol on the Mainpage
 
+<img width="1187" height="674" alt="be2ff1a7a1e2e44a17b203d9cdc7d075" src="https://github.com/user-attachments/assets/181166a1-b874-4e7a-b9a7-d5d3be530237" />
 
 
 ## Wrapper License
