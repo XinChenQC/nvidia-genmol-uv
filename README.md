@@ -78,7 +78,7 @@ The input fragment SMILES can include **attachment points** indicated by `[*]` o
 
 # Try it on ChemOrchestra
 
-You can also try out our integrated product for free directly on the [ChemOrchestra](www.quantabricks.com) platform.
+You can also try out our integrated product for free directly on the [ChemOrchestra](https://www.quantabricks.xyz) platform.
 
 ![0730-ezgif com-video-to-gif-converter](https://github.com/user-attachments/assets/8a1915cd-c743-4bf7-9729-0a34a67515ee)
 
