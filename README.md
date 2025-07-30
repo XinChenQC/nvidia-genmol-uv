@@ -84,7 +84,7 @@ You can also try out our integrated product for free directly on the [ChemOrches
 
 ## Wrapper License
 
-This wrapper (outside genmol), built on NVIDIA code, is licensed under the MIT License.
+This wrapper (outside genmol), interacts with NVIDIA code, is licensed under the MIT License.
 
 ## NVIDIA-part License
 Copyright @ 2025, NVIDIA Corporation. All rights reserved.<br>
