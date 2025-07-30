@@ -75,6 +75,13 @@ The input fragment SMILES can include **attachment points** indicated by `[*]` o
 * **Superstructure Generation** – Generate a full molecule given a partial structure
 * **Linker Design (1-step)** – Link two fragments without intermediate mixing
 
+
+# Try it on ChemOrchestra
+
+You can also try out our integrated product for free directly on the [ChemOrchestra](www.quantabricks.com) platform.
+
+![0730-ezgif com-video-to-gif-converter](https://github.com/user-attachments/assets/8a1915cd-c743-4bf7-9729-0a34a67515ee)
+
 ## Wrapper License
 
 This wrapper (outside genmol), built on NVIDIA code, is licensed under the MIT License.
