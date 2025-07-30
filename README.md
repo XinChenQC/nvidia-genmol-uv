@@ -82,6 +82,12 @@ You can also try out our integrated product for free directly on the [ChemOrches
 
 ![0730-ezgif com-video-to-gif-converter](https://github.com/user-attachments/assets/8a1915cd-c743-4bf7-9729-0a34a67515ee)
 
+The MolGen tool is shown on the main page. 
+
+<img width="1237" height="761" alt="image" src="https://github.com/user-attachments/assets/9c1f7c81-52c2-4680-9abb-87e5bdd543bf" />
+
+
+
 ## Wrapper License
 
 This wrapper (outside genmol), interacts with NVIDIA code, is licensed under the MIT License.
