@@ -1,41 +1,73 @@
-def test():
+import argparse
+import json
+import sys
+from genmol.sampler import Sampler
 
 
-    '''
-    ! Linker Design / Scaffold Morphing = generate a linker fragment that connects given two side chains
-    ! Motif Extension = generate molecule with existing motif
-    ! Scaffold Decoration = same as Motif Extension but start with larger scaffold 
-    ! Superstructure Generation = generate a molecule when a substructure constraint is given
-    ! Linker Design (1-step) = generate a linker fragment that connects given two side chains without sequence mixing
-    '''
-    from genmol.sampler import Sampler
-    sampler = Sampler('./model.ckpt')
-    num_samples = 20
-    fragment = 'COc1ccc2c(c1)nc([nH]2)S(=O)Cc1ncc(c(c1C)OC)C' # SMILES
+def get_default_params(task):
+    if task == 'random':
+        return {'gamma': 0, 'randomness': 0.5, 'softmax_temp': 0.5}
+    elif task == 'linker_design':
+        return {'gamma': 0, 'randomness': 3, 'softmax_temp': 1.2}
+    elif task == 'motif_extension':
+        return {'gamma': 0.3, 'randomness': 1.2, 'softmax_temp': 1.2}
+    elif task == 'scaffold_decoration':
+        return {'gamma': 0.3, 'randomness': 2, 'softmax_temp': 1.2}
+    elif task == 'superstructure_generation':
+        return {'gamma': 0.4, 'randomness': 2, 'softmax_temp': 1.2}
+    else:
+        return {'gamma': None, 'randomness': None, 'softmax_temp': 1.2}
 
-    '''
-    print('Doing linker_design')
-    fragment2 = '[11*]N1CCCC1.[17*]c1ccc2c(c1)OCCO2' # SMILES
-    samples = sampler.fragment_linking(fragment2, num_samples, randomness=3)
-    print(samples)
+def run_task(args):
+    import torch
+    torch.set_num_threads(int(args.ncores))
+    args.task = args.task.lower()
+    defaults = get_default_params(args.task)
+    gamma = args.gamma if args.gamma is not None else defaults['gamma']
+    randomness = args.randomness if args.randomness is not None else defaults['randomness']
+    softmax_temp = args.softmax_temp if args.softmax_temp is not None else defaults['softmax_temp']
 
-    print('Doing motif_extension')
-    fragment = '[17*]c1ccc2c(c1)OCCO2' # SMILES
-    samples = sampler.fragment_completion(fragment, num_samples, randomness=1.2, gamma=0.3)
-    print(samples)
-    '''
-    print('Doing scaffold_decoration')
-    fragment = 'O=C(NN1CC([12*])CC1)c1cccc([13*])c1' # SMILES
-    samples = sampler.fragment_completion(fragment, num_samples, gamma=0.3,randomness=0.5, softmax_temp=0.5 )
-    print(len(set(samples)))
-    print(set(samples))
+    sampler = Sampler(args.model_path)
 
-    print('Doing Superstructure Generation')
-    fragment = 'c1ccc(Oc2ccccc2)cc1' # SMILES
-    samples = sampler.fragment_completion(fragment, num_samples, gamma=0.4, randomness=3)
-    print(len(set(samples)))
-    print(set(samples))
+    if args.task in ['scaffold_decoration', 'motif_extension', 'superstructure_generation']:
+        samples = sampler.fragment_completion(
+            args.fragment,
+            num_samples=args.num_samples,
+            gamma=gamma,
+            randomness=randomness,
+            softmax_temp=softmax_temp
+        )
+    elif args.task == 'random':
+        samples = sampler.de_novo_generation(
+            num_samples=args.num_samples,
+            randomness=randomness,
+            softmax_temp=softmax_temp
+        )
+    elif args.task == 'linker_design':
+        samples = sampler.fragment_linking(
+            args.fragment,
+            num_samples=args.num_samples,
+            randomness=randomness
+        )
+    else:
+        raise ValueError(f"Unknown task: {args.task}")
 
+    return list(set(samples))
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--task', type=str, required=True)
+    parser.add_argument('--fragment', type=str, required=True)
+    parser.add_argument('--ncores', type=str, default=12)
+    parser.add_argument('--num-samples', type=int, default=20)
+    parser.add_argument('--model-path', type=str, default='./model.ckpt')
+    parser.add_argument('--gamma', type=float, default=None)
+    parser.add_argument('--randomness', type=float, default=None)
+    parser.add_argument('--softmax-temp', type=float, default=None)
+    args = parser.parse_args()
+
+    samples = run_task(args)
+    print(json.dumps(samples))
 
 if __name__ == "__main__":
-    test()
+    main()
