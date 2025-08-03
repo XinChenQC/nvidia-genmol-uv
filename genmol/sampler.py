@@ -155,7 +155,7 @@ class Sampler:
             cores = sf.utils.list_individual_attach_points(Chem.MolFromSmiles(fragment), depth=3)
             fragment = random.choice(cores)
             
-        encoded_fragment = sf.SAFEConverter(ignore_stereo=True).encoder(fragment, allow_empty=True) + '.'
+        encoded_fragment = sf.SAFEConverter().encoder(fragment, allow_empty=True) + '.'
         x = self.model.tokenizer([encoded_fragment],
                                  return_tensors='pt',
                                  truncation=True,
@@ -168,7 +168,7 @@ class Sampler:
         return samples
 
     def mask_modification(self, smiles, min_len=30, **kwargs):
-        encoded_smiles = sf.SAFEConverter(slicer=self.slicer, ignore_stereo=True).encoder(smiles, allow_empty=True)
+        encoded_smiles = sf.SAFEConverter(slicer=self.slicer).encoder(smiles, allow_empty=True)
         x = self.model.tokenizer([encoded_smiles],
                                   return_tensors='pt',
                                   truncation=True,
@@ -189,7 +189,7 @@ class Sampler:
     def remask(self, smiles, input_ids=None, **kwargs):
         x = input_ids
         if x is None:
-            encoded_smiles = sf.SAFEConverter(slicer=self.slicer, ignore_stereo=True).encoder(smiles, allow_empty=True)
+            encoded_smiles = sf.SAFEConverter(slicer=self.slicer).encoder(smiles, allow_empty=True)
             x = self.model.tokenizer([encoded_smiles],
                                      return_tensors='pt',
                                      truncation=True,
