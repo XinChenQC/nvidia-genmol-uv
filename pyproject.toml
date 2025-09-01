@@ -17,8 +17,8 @@ dependencies = [
     "safe-mol>=0.1.13",
     "scikit-learn>=1.7.1",
     "tokenizers==0.21.2",
-    "torch>=2.7.1",
-    "torchvision>=0.22.1",
+    "torch>=2.7.1+cpu",
+    "torchvision>=0.22.1+cpu",
     "transformers>=4.50.3",
     "wandb>=0.21.0",
 ]
