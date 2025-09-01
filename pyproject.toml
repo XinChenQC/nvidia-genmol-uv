@@ -4,7 +4,6 @@ version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.11"
-
 dependencies = [
     "bionemo-moco>=0.0.2.1",
     "easydict>=1.13",
@@ -18,11 +17,12 @@ dependencies = [
     "safe-mol>=0.1.13",
     "scikit-learn>=1.7.1",
     "tokenizers==0.21.2",
-    "torch==2.7.1+cpu",
-    "torchvision==0.22.1+cpu",
+    "torch>=2.7.1",
+    "torchvision>=0.22.1",
     "transformers>=4.50.3",
     "wandb>=0.21.0",
 ]
+
 
 [tool.setuptools]
 include-package-data = true
@@ -33,14 +33,3 @@ include = ["genmol", "genmol.*"]
 
 [tool.setuptools.package-data]
 "genmol" = ["data/**/*"]
-
-# =========================
-# CPU-only PyTorch 配置
-# =========================
-[tool.uv.sources]
-torch = { index = "pytorch-cpu" }
-torchvision = { index = "pytorch-cpu" }
-
-[[tool.uv.index]]
-name = "pytorch-cpu"
-url = "https://download.pytorch.org/whl/cpu"
