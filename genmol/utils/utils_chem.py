@@ -23,11 +23,18 @@ from contextlib import suppress
 from rdkit import Chem, RDLogger
 RDLogger.DisableLog('rdApp.*')
 
-# Fork context: the subprocess inherits the already-imported parent memory,
-# so there is no module re-import and no entrypoint re-execution. The child
-# only does CPU/RDKit work and never touches CUDA, so forking after the GPU
-# model is loaded is safe here.
-_FORK_CTX = multiprocessing.get_context('fork')
+# Run RDKit slicing in an isolated process so a C++ SIGSEGV in FragmentOnBonds
+# can't kill the worker. Use 'forkserver', NOT 'fork': the GPU worker already
+# has CUDA initialized, and forking such a process crashes the child at startup
+# (PyTorch's pthread_atfork handlers touch the now-invalid CUDA context). The
+# forkserver's server is a freshly exec'd Python with no CUDA, and unlike a
+# naive 'spawn' it does not re-import the serverless entrypoint. Preload only
+# the lightweight RDKit/SAFE deps (no torch) so worker startup stays fast.
+try:
+    _MP_CTX = multiprocessing.get_context('forkserver')
+    _MP_CTX.set_forkserver_preload(['genmol.utils.utils_chem'])
+except Exception:
+    _MP_CTX = multiprocessing.get_context('spawn')
 
 # https://github.com/datamol-io/safe/blob/main/safe/sample.py
 # https://github.com/jensengroup/GB_GA/blob/master/crossover.py
@@ -80,13 +87,13 @@ def _mix_sequences_impl(prefix_sequences, suffix_sequences, prefix, suffix, num_
 def mix_sequences(prefix_sequences, suffix_sequences, prefix, suffix, num_samples=1):
     # MolSlicer -> FragmentOnBonds can SIGSEGV (uncatchable by try/except) in
     # RDKit's C++ layer on some generated molecules. Run the slicing/linking in
-    # a forked subprocess so a crash returns no linkers instead of killing the
-    # whole worker (exit code 139).
+    # an isolated subprocess so a crash returns no linkers instead of killing
+    # the whole worker (exit code 139).
     try:
-        with ProcessPoolExecutor(max_workers=1, mp_context=_FORK_CTX) as ex:
+        with ProcessPoolExecutor(max_workers=1, mp_context=_MP_CTX) as ex:
             future = ex.submit(_mix_sequences_impl, prefix_sequences,
                                suffix_sequences, prefix, suffix, num_samples)
-            return future.result(timeout=60)
+            return future.result(timeout=90)
     except Exception:
         return []
 
