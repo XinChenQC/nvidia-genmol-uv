@@ -55,16 +55,27 @@ def filter_by_substructure(sequences, substruct):
 _FAILED = object()
 
 
-def _run_isolated(fn, *args, timeout=30):
-    # Run one crashy RDKit call in its own subprocess. A C++ SIGSEGV there
-    # surfaces as BrokenProcessPool; we return _FAILED so the caller can skip
-    # just that molecule instead of losing the whole batch (or killing the
-    # worker with exit code 139).
+def _isolated_map(fn, arg_tuples, timeout=15):
+    # Run fn(*args) for each arg tuple in a subprocess, REUSING one warm worker
+    # across calls. Good molecules run back-to-back on the same worker (fast);
+    # only a molecule that SIGSEGVs FragmentOnBonds breaks the pool, surfacing
+    # as BrokenProcessPool -> we record _FAILED (skip just that molecule) and
+    # recreate the worker for the rest. This avoids the ~seconds-per-call cost
+    # of spawning a fresh subprocess for every molecule.
+    results = []
+    ex = ProcessPoolExecutor(max_workers=1, mp_context=_MP_CTX)
     try:
-        with ProcessPoolExecutor(max_workers=1, mp_context=_MP_CTX) as ex:
-            return ex.submit(fn, *args).result(timeout=timeout)
-    except Exception:
-        return _FAILED
+        for args in arg_tuples:
+            try:
+                results.append(ex.submit(fn, *args).result(timeout=timeout))
+            except Exception:
+                results.append(_FAILED)
+                # worker likely died (crash/timeout); recreate for the rest
+                ex.shutdown(wait=False, cancel_futures=True)
+                ex = ProcessPoolExecutor(max_workers=1, mp_context=_MP_CTX)
+    finally:
+        ex.shutdown(wait=False, cancel_futures=True)
+    return results
 
 
 def _slice_one(smiles, query_smarts):
@@ -85,23 +96,18 @@ def _link_one(linker_smiles, prefix, suffix):
 
 def mix_sequences(prefix_sequences, suffix_sequences, prefix, suffix, num_samples=1):
     # MolSlicer -> FragmentOnBonds can SIGSEGV (uncatchable by try/except) in
-    # RDKit's C++ layer on some generated molecules. Each slicing/linking call
-    # runs in its own isolated subprocess so a single crashing molecule only
-    # drops itself, instead of taking down the whole batch (0 molecules) or the
-    # worker (exit code 139). Same algorithm as upstream, just per-call isolated.
-    linkers = []
-    for x in prefix_sequences:
-        r = _run_isolated(_slice_one, x, prefix)
-        if r is not _FAILED and r:
-            linkers.append(r)
-    for x in suffix_sequences:
-        r = _run_isolated(_slice_one, x, suffix)
-        if r is not _FAILED and r:
-            linkers.append(r)
+    # RDKit's C++ layer on some generated molecules. The slicing/linking runs in
+    # an isolated worker so a single crashing molecule only drops itself instead
+    # of taking down the whole batch (0 molecules) or the worker (exit code 139).
+    # Same algorithm as upstream, just isolated.
+    slice_args = ([(x, prefix) for x in prefix_sequences] +
+                  [(x, suffix) for x in suffix_sequences])
+    linkers = [r for r in _isolated_map(_slice_one, slice_args)
+               if r is not _FAILED and r]
 
     linked = []
-    for n_linked, linker in enumerate(linkers):
-        r = _run_isolated(_link_one, linker, prefix, suffix)
+    for n_linked, r in enumerate(_isolated_map(_link_one,
+                                  [(l, prefix, suffix) for l in linkers])):
         if r is not _FAILED and r:
             linked.extend(r)
         if n_linked > num_samples:
