@@ -28,7 +28,7 @@ This will automatically install all dependencies defined in `pyproject.toml`.
 ### 3. Download the model checkpoint
 
 ```bash
-curl -L 'https://api.ngc.nvidia.com/v2/resources/org/nvidia/team/clara/genmol_v1/1.0/files?redirect=true&path=model.ckpt' -o model.ckpt
+huggingface-cli download nvidia/NV-GenMol-89M-v2 model_v2.ckpt --local-dir .
 ```
 
 ## Example Usage
@@ -36,7 +36,7 @@ curl -L 'https://api.ngc.nvidia.com/v2/resources/org/nvidia/team/clara/genmol_v1
 ```python
 from genmol.sampler import Sampler
 
-sampler = Sampler('./model.ckpt')
+sampler = Sampler('./model_v2.ckpt')
 num_samples = 20
 
 print('Linker Design')

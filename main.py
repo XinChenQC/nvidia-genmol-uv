@@ -60,7 +60,7 @@ def main():
     parser.add_argument('--fragment', type=str, required=True)
     parser.add_argument('--ncores', type=str, default=12)
     parser.add_argument('--num-samples', type=int, default=20)
-    parser.add_argument('--model-path', type=str, default='./model.ckpt')
+    parser.add_argument('--model-path', type=str, default='./model_v2.ckpt')
     parser.add_argument('--gamma', type=float, default=None)
     parser.add_argument('--randomness', type=float, default=None)
     parser.add_argument('--softmax-temp', type=float, default=None)

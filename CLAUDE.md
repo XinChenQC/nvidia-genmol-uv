@@ -22,7 +22,7 @@ uv pip install -e .
 ### Required Model File
 The project requires a pre-trained model checkpoint that must be downloaded:
 ```bash
-curl -L 'https://api.ngc.nvidia.com/v2/resources/org/nvidia/team/clara/genmol_v1/1.0/files?redirect=true&path=model.ckpt' -o model.ckpt
+huggingface-cli download nvidia/NV-GenMol-89M-v2 model_v2.ckpt --local-dir .
 ```
 
 ## Running the Code
@@ -46,7 +46,7 @@ uv run python main.py --task linker_design --fragment "[11*]N1CCCC1.[17*]c1ccc2c
 ```python
 from genmol.sampler import Sampler
 
-sampler = Sampler('./model.ckpt')
+sampler = Sampler('./model_v2.ckpt')
 samples = sampler.fragment_linking(fragment, num_samples=20, randomness=3)
 ```
 

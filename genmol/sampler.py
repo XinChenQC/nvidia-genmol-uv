@@ -129,7 +129,10 @@ class Sampler:
         return samples
     
     def fragment_linking(self, fragment, num_samples=1, softmax_temp=1.2, randomness=2, gamma=0):
-        encoded_fragment = sf.SAFEConverter(slicer=None).encoder(fragment, allow_empty=True)
+        if self.model.config.training.get('use_bracket_safe'):
+            encoded_fragment = BracketSAFEConverter(slicer=None).encoder(fragment, allow_empty=True)
+        else:
+            encoded_fragment = sf.SAFEConverter(slicer=None).encoder(fragment, allow_empty=True)
         prefix, suffix = encoded_fragment.split('.')
 
         x = self.model.tokenizer([prefix + '.'],
