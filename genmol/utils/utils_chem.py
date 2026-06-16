@@ -14,6 +14,8 @@
 # limitations under the License.
 
 
+import os
+import time
 import random
 import multiprocessing
 from concurrent.futures import ProcessPoolExecutor
@@ -22,6 +24,12 @@ import datamol as dm
 from contextlib import suppress
 from rdkit import Chem, RDLogger
 RDLogger.DisableLog('rdApp.*')
+
+# Wall-clock budget for the isolated slicing/linking in mix_sequences. Crash
+# recovery (recreating a worker) has overhead, so a fragment that crashes a lot
+# could otherwise exceed the endpoint timeout. When the budget is spent we stop
+# and return whatever molecules were collected — never time out. Configurable.
+_MIX_BUDGET_S = float(os.environ.get("GENMOL_MIX_BUDGET_S", "70"))
 
 # Run RDKit slicing in an isolated process so a C++ SIGSEGV in FragmentOnBonds
 # can't kill the worker. Use 'forkserver', NOT 'fork': the GPU worker already
@@ -55,17 +63,20 @@ def filter_by_substructure(sequences, substruct):
 _FAILED = object()
 
 
-def _isolated_map(fn, arg_tuples, timeout=15):
+def _isolated_map(fn, arg_tuples, timeout=15, deadline=None):
     # Run fn(*args) for each arg tuple in a subprocess, REUSING one warm worker
     # across calls. Good molecules run back-to-back on the same worker (fast);
     # only a molecule that SIGSEGVs FragmentOnBonds breaks the pool, surfacing
     # as BrokenProcessPool -> we record _FAILED (skip just that molecule) and
     # recreate the worker for the rest. This avoids the ~seconds-per-call cost
-    # of spawning a fresh subprocess for every molecule.
+    # of spawning a fresh subprocess for every molecule. Stops early once the
+    # wall-clock deadline is reached so the request can never time out.
     results = []
     ex = ProcessPoolExecutor(max_workers=1, mp_context=_MP_CTX)
     try:
         for args in arg_tuples:
+            if deadline is not None and time.monotonic() >= deadline:
+                break
             try:
                 results.append(ex.submit(fn, *args).result(timeout=timeout))
             except Exception:
@@ -99,15 +110,19 @@ def mix_sequences(prefix_sequences, suffix_sequences, prefix, suffix, num_sample
     # RDKit's C++ layer on some generated molecules. The slicing/linking runs in
     # an isolated worker so a single crashing molecule only drops itself instead
     # of taking down the whole batch (0 molecules) or the worker (exit code 139).
-    # Same algorithm as upstream, just isolated.
+    # Same algorithm as upstream, just isolated. A shared wall-clock budget
+    # across both phases guarantees the request never exceeds the endpoint
+    # timeout: when it runs out we return whatever molecules we already have.
+    deadline = time.monotonic() + _MIX_BUDGET_S
     slice_args = ([(x, prefix) for x in prefix_sequences] +
                   [(x, suffix) for x in suffix_sequences])
-    linkers = [r for r in _isolated_map(_slice_one, slice_args)
+    linkers = [r for r in _isolated_map(_slice_one, slice_args, deadline=deadline)
                if r is not _FAILED and r]
 
     linked = []
     for n_linked, r in enumerate(_isolated_map(_link_one,
-                                  [(l, prefix, suffix) for l in linkers])):
+                                  [(l, prefix, suffix) for l in linkers],
+                                  deadline=deadline)):
         if r is not _FAILED and r:
             linked.extend(r)
         if n_linked > num_samples:
