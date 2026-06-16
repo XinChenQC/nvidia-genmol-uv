@@ -26,20 +26,43 @@ RDLogger.DisableLog('rdApp.*')
 _mp_ctx = multiprocessing.get_context('spawn')
 
 
-def _link_fragments_worker(args):
-    # Runs in a fresh subprocess — imports are re-executed here
-    linker_smiles, prefix, suffix = args
+def _mix_sequences_worker(args):
+    # Runs in a fresh spawn subprocess — all C++ segfaults are contained here
+    prefix_sequences, suffix_sequences, prefix, suffix, num_samples = args
     import safe as sf
+    import datamol as dm
+    from contextlib import suppress
     from rdkit import Chem, RDLogger
     RDLogger.DisableLog('rdApp.*')
-    slicer = sf.utils.MolSlicer(require_ring_system=False)
-    try:
-        linker = Chem.MolFromSmiles(linker_smiles)
-        if linker is None:
-            return []
-        return [x for x in slicer.link_fragments(linker, prefix, suffix) if x]
-    except Exception:
-        return []
+
+    mol_linker_slicer = sf.utils.MolSlicer(require_ring_system=False)
+    prefix_linkers = []
+    suffix_linkers = []
+    prefix_query = dm.from_smarts(prefix)
+    suffix_query = dm.from_smarts(suffix)
+
+    for x in prefix_sequences:
+        with suppress(Exception):
+            x = dm.to_mol(x)
+            out = mol_linker_slicer(x, prefix_query)
+            prefix_linkers.append(out[1])
+
+    for x in suffix_sequences:
+        with suppress(Exception):
+            x = dm.to_mol(x)
+            out = mol_linker_slicer(x, suffix_query)
+            suffix_linkers.append(out[1])
+
+    linked = []
+    linkers = prefix_linkers + suffix_linkers
+    linkers = [x for x in linkers if x is not None]
+    for n_linked, linker in enumerate(linkers):
+        with suppress(Exception):
+            linked.extend(mol_linker_slicer.link_fragments(linker, prefix, suffix))
+        if n_linked > num_samples:
+            break
+        linked = [x for x in linked if x]
+    return linked[:num_samples]
 
 # https://github.com/datamol-io/safe/blob/main/safe/sample.py
 # https://github.com/jensengroup/GB_GA/blob/master/crossover.py
@@ -58,44 +81,17 @@ def filter_by_substructure(sequences, substruct):
 
 
 def mix_sequences(prefix_sequences, suffix_sequences, prefix, suffix, num_samples=1):
-    mol_linker_slicer = sf.utils.MolSlicer(require_ring_system=False)
-
-    prefix_linkers = []
-    suffix_linkers = []
-    prefix_query = dm.from_smarts(prefix)
-    suffix_query = dm.from_smarts(suffix)
-
-    for x in prefix_sequences:
-        with suppress(Exception):
-            x = dm.to_mol(x)
-            out = mol_linker_slicer(x, prefix_query)
-            prefix_linkers.append(out[1])
-
-    for x in suffix_sequences:
-        with suppress(Exception):
-            x = dm.to_mol(x)
-            out = mol_linker_slicer(x, suffix_query)
-            suffix_linkers.append(out[1])
-
-    n_linked = 0
-    linked = []
-    linkers = prefix_linkers + suffix_linkers
-    linkers = [x for x in linkers if x is not None]
-    # link_fragments can segfault on unusual GPU-generated molecules.
-    # Run calls in an isolated spawn subprocess so a crash doesn't kill the handler.
-    with _mp_ctx.Pool(1) as pool:
-        for n_linked, linker in enumerate(linkers):
-            try:
-                linker_smiles = Chem.MolToSmiles(linker)
-                result = pool.apply_async(_link_fragments_worker,
-                                          [(linker_smiles, prefix, suffix)])
-                linked.extend(result.get(timeout=10))
-            except Exception:
-                pass
-            if n_linked > num_samples:
-                break
-            linked = [x for x in linked if x]
-    return linked[:num_samples]
+    # Run entirely in an isolated spawn subprocess to contain any C++ segfaults
+    # (MolSlicer and link_fragments can SIGSEGV on unusual GPU-generated molecules)
+    try:
+        with _mp_ctx.Pool(1) as pool:
+            result = pool.apply_async(
+                _mix_sequences_worker,
+                [(prefix_sequences, suffix_sequences, prefix, suffix, num_samples)]
+            )
+            return result.get(timeout=60)
+    except Exception:
+        return []
     
 
 def cut(smiles):
