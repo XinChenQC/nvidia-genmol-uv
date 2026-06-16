@@ -15,11 +15,19 @@
 
 
 import random
+import multiprocessing
+from concurrent.futures import ProcessPoolExecutor
 import safe as sf
 import datamol as dm
 from contextlib import suppress
 from rdkit import Chem, RDLogger
 RDLogger.DisableLog('rdApp.*')
+
+# Fork context: the subprocess inherits the already-imported parent memory,
+# so there is no module re-import and no entrypoint re-execution. The child
+# only does CPU/RDKit work and never touches CUDA, so forking after the GPU
+# model is loaded is safe here.
+_FORK_CTX = multiprocessing.get_context('fork')
 
 # https://github.com/datamol-io/safe/blob/main/safe/sample.py
 # https://github.com/jensengroup/GB_GA/blob/master/crossover.py
@@ -37,7 +45,7 @@ def filter_by_substructure(sequences, substruct):
     return sf.utils.filter_by_substructure_constraints(sequences, substruct)
 
 
-def mix_sequences(prefix_sequences, suffix_sequences, prefix, suffix, num_samples=1):
+def _mix_sequences_impl(prefix_sequences, suffix_sequences, prefix, suffix, num_samples=1):
     mol_linker_slicer = sf.utils.MolSlicer(require_ring_system=False)
 
     prefix_linkers = []
@@ -67,6 +75,20 @@ def mix_sequences(prefix_sequences, suffix_sequences, prefix, suffix, num_sample
             break
         linked = [x for x in linked if x]
     return linked[:num_samples]
+
+
+def mix_sequences(prefix_sequences, suffix_sequences, prefix, suffix, num_samples=1):
+    # MolSlicer -> FragmentOnBonds can SIGSEGV (uncatchable by try/except) in
+    # RDKit's C++ layer on some generated molecules. Run the slicing/linking in
+    # a forked subprocess so a crash returns no linkers instead of killing the
+    # whole worker (exit code 139).
+    try:
+        with ProcessPoolExecutor(max_workers=1, mp_context=_FORK_CTX) as ex:
+            future = ex.submit(_mix_sequences_impl, prefix_sequences,
+                               suffix_sequences, prefix, suffix, num_samples)
+            return future.result(timeout=60)
+    except Exception:
+        return []
 
 
 def cut(smiles):
