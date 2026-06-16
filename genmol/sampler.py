@@ -76,6 +76,11 @@ class Sampler:
                 logits_poor = self.model(x_poor, attention_mask=attention_mask)
                 logits = w * logits + (1 - w) * logits_poor
 
+            # Sanitize logits: NaN/Inf here makes softmax produce invalid probs,
+            # and torch.Categorical.sample() then returns out-of-bounds indices on
+            # CUDA, corrupting the context and crashing the worker with SIGSEGV (139).
+            logits = torch.nan_to_num(logits, nan=0.0, posinf=1e4, neginf=-1e4)
+
             x = self.mdlm.step_confidence(logits, x, i, num_steps, softmax_temp, randomness)
             
         # decode to SAFE strings
@@ -93,20 +98,15 @@ class Sampler:
         with open(os.path.join(ROOT_DIR, 'data/len.pk'), 'rb') as f:
             seq_len_list = pickle.load(f)
 
-        max_len = self.model.config.model.max_position_embeddings
         x = x[0]
         x_new = []
         for _ in range(num_samples):
             add_seq_len = max(random.choice(seq_len_list) - len(x), min_add_len)
-            seq = torch.hstack([x[:-1],
-                                torch.full((add_seq_len,), self.model.mask_index),
-                                x[-1:]])
-            # Clamp to max_position_embeddings to prevent CUDA out-of-bounds SIGSEGV
-            if len(seq) > max_len:
-                seq = torch.hstack([seq[:max_len - 1], seq[-1:]])
-            x_new.append(seq)
+            x_new.append(torch.hstack([x[:-1],
+                                      torch.full((add_seq_len,), self.model.mask_index),
+                                      x[-1:]]))
         pad_len = max([len(xx) for xx in x_new])
-        x_new = [torch.hstack([xx, torch.full((pad_len - len(xx),), self.pad_index)]) for xx in x_new]
+        x_new = [torch.hstack([xx,torch.full((pad_len - len(xx),), self.pad_index)]) for xx in x_new]
         return torch.stack(x_new)
     
     @torch.no_grad()
