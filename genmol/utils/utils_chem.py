@@ -52,50 +52,62 @@ def filter_by_substructure(sequences, substruct):
     return sf.utils.filter_by_substructure_constraints(sequences, substruct)
 
 
-def _mix_sequences_impl(prefix_sequences, suffix_sequences, prefix, suffix, num_samples=1):
-    mol_linker_slicer = sf.utils.MolSlicer(require_ring_system=False)
+_FAILED = object()
 
-    prefix_linkers = []
-    suffix_linkers = []
-    prefix_query = dm.from_smarts(prefix)
-    suffix_query = dm.from_smarts(suffix)
 
-    for x in prefix_sequences:
-        with suppress(Exception):
-            x = dm.to_mol(x)
-            out = mol_linker_slicer(x, prefix_query)
-            prefix_linkers.append(out[1])
+def _run_isolated(fn, *args, timeout=30):
+    # Run one crashy RDKit call in its own subprocess. A C++ SIGSEGV there
+    # surfaces as BrokenProcessPool; we return _FAILED so the caller can skip
+    # just that molecule instead of losing the whole batch (or killing the
+    # worker with exit code 139).
+    try:
+        with ProcessPoolExecutor(max_workers=1, mp_context=_MP_CTX) as ex:
+            return ex.submit(fn, *args).result(timeout=timeout)
+    except Exception:
+        return _FAILED
 
-    for x in suffix_sequences:
-        with suppress(Exception):
-            x = dm.to_mol(x)
-            out = mol_linker_slicer(x, suffix_query)
-            suffix_linkers.append(out[1])
 
-    n_linked = 0
-    linked = []
-    linkers = prefix_linkers + suffix_linkers
-    linkers = [x for x in linkers if x is not None]
-    for n_linked, linker in enumerate(linkers):
-        linked.extend(mol_linker_slicer.link_fragments(linker, prefix, suffix))
-        if n_linked > num_samples:
-            break
-        linked = [x for x in linked if x]
-    return linked[:num_samples]
+def _slice_one(smiles, query_smarts):
+    """Slice one molecule and return its linker as SMILES (or None)."""
+    slicer = sf.utils.MolSlicer(require_ring_system=False)
+    query = dm.from_smarts(query_smarts)
+    out = slicer(dm.to_mol(smiles), query)
+    linker = out[1]
+    return Chem.MolToSmiles(linker) if linker is not None else None
+
+
+def _link_one(linker_smiles, prefix, suffix):
+    """Link one linker fragment with the two attachment fragments -> SMILES list."""
+    slicer = sf.utils.MolSlicer(require_ring_system=False)
+    linker = dm.to_mol(linker_smiles)
+    return [x for x in slicer.link_fragments(linker, prefix, suffix) if x]
 
 
 def mix_sequences(prefix_sequences, suffix_sequences, prefix, suffix, num_samples=1):
     # MolSlicer -> FragmentOnBonds can SIGSEGV (uncatchable by try/except) in
-    # RDKit's C++ layer on some generated molecules. Run the slicing/linking in
-    # an isolated subprocess so a crash returns no linkers instead of killing
-    # the whole worker (exit code 139).
-    try:
-        with ProcessPoolExecutor(max_workers=1, mp_context=_MP_CTX) as ex:
-            future = ex.submit(_mix_sequences_impl, prefix_sequences,
-                               suffix_sequences, prefix, suffix, num_samples)
-            return future.result(timeout=90)
-    except Exception:
-        return []
+    # RDKit's C++ layer on some generated molecules. Each slicing/linking call
+    # runs in its own isolated subprocess so a single crashing molecule only
+    # drops itself, instead of taking down the whole batch (0 molecules) or the
+    # worker (exit code 139). Same algorithm as upstream, just per-call isolated.
+    linkers = []
+    for x in prefix_sequences:
+        r = _run_isolated(_slice_one, x, prefix)
+        if r is not _FAILED and r:
+            linkers.append(r)
+    for x in suffix_sequences:
+        r = _run_isolated(_slice_one, x, suffix)
+        if r is not _FAILED and r:
+            linkers.append(r)
+
+    linked = []
+    for n_linked, linker in enumerate(linkers):
+        r = _run_isolated(_link_one, linker, prefix, suffix)
+        if r is not _FAILED and r:
+            linked.extend(r)
+        if n_linked > num_samples:
+            break
+        linked = [x for x in linked if x]
+    return linked[:num_samples]
 
 
 def cut(smiles):
