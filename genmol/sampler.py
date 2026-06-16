@@ -76,11 +76,6 @@ class Sampler:
                 logits_poor = self.model(x_poor, attention_mask=attention_mask)
                 logits = w * logits + (1 - w) * logits_poor
 
-            # Sanitize logits: NaN/Inf here makes softmax produce invalid probs,
-            # and torch.Categorical.sample() then returns out-of-bounds indices on
-            # CUDA, corrupting the context and crashing the worker with SIGSEGV (139).
-            logits = torch.nan_to_num(logits, nan=0.0, posinf=1e4, neginf=-1e4)
-
             x = self.mdlm.step_confidence(logits, x, i, num_steps, softmax_temp, randomness)
             
         # decode to SAFE strings
